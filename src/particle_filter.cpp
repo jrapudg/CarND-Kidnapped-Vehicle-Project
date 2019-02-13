@@ -150,7 +150,78 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    *   and the following is a good resource for the actual equation to implement
    *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
    */
+   double W = 0.0;
+   for (unsigned i = 0; i < num_particles; ++i){
 
+         double x_part = particles[i].x;
+         double y_part = particles[i].y;
+         double theta = particles[i].theta;
+
+         //(1) Transform observation from car's coordinates to map's coordinates
+
+         vector<LandmarkObs> map_coordinates_observations;
+
+         for(unsigned j = 0; j < observations.size(); ++j){
+               double x_obs = observations[j].x;
+               double y_obs = observations[j].y;
+
+               LandmarkObs map_coordinates_obs;
+               map_coordinates_obs.id = j;
+               // transform to map y coordinate
+               map_coordinates_obs.x = x_part + (cos(theta) * x_obs) - (sin(theta) * y_obs);
+               map_coordinates_obs.y = y_part + (sin(theta) * x_obs) + (cos(theta) * y_obs);
+               map_coordinates_observations.push_back(map_coordinates_obs);
+         }
+      // (2) Only keep observations from sensor Range
+          vector<LandmarkObs> in_range_landmarks;
+          for (unsigned k = 0; k < map_landmarks.landmark_list.size(); k++) {
+            Map::single_landmark_s current_landmark = map_landmarks.landmark_list[k];
+            if ((fabs((x_part - current_landmark.x_f)) <= sensor_range) && (fabs((y_part - current_landmark.y_f)) <= sensor_range))
+              in_range_landmarks.push_back(LandmarkObs {current_landmark.id_i, current_landmark.x_f, current_landmark.y_f});
+          }
+
+      // (3) Association
+      dataAssociation(in_range_landmarks, map_coordinates_observations);
+
+      // (4) Weights calculations
+
+      particles[i].weight = 1.0;
+
+      double sigma_x = std_landmark[0];
+      double sigma_y = std_landmark[1];
+      double sigma_x_2 = pow(sigma_x, 2);
+      double sigma_y_2 = pow(sigma_y, 2);
+      double prob_normalizer = (1.0/(2.0 * M_PI * sigma_x * sigma_y));
+
+      /*Calculate the weight of particle based on the multivariate Gaussian probability function*/
+      for (unsigned l = 0; l < map_coordinates_observations.size(); ++l) {
+        double x_map = map_coordinates_observations[l].x;
+        double y_map = map_coordinates_observations[l].y;
+        double id_map = map_coordinates_observations[l].id;
+        double prob = 1.0;
+
+        for (unsigned n = 0; n < in_range_landmarks.size(); ++n) {
+          double in_range_landmark_x = in_range_landmarks[n].x;
+          double in_range_landmark_y = in_range_landmarks[n].y;
+          double in_range_landmark_id = in_range_landmarks[n].id;
+
+          if (id_map == in_range_landmark_id) {
+            prob = prob_normalizer * exp(-1.0 * ((pow((x_map - in_range_landmark_x), 2)/(2.0 * sigma_x_2)) + (pow((y_map - in_range_landmark_y), 2)/(2.0 * sigma_y_2))));
+            particles[i].weight *= prob;
+          }
+        }
+      }
+
+      W += particles[i].weight;
+
+      }
+
+//(5) Normalize the weights of all particles since resmapling using probabilistic approach.*/
+for (unsigned i = 0; i < particles.size(); i++) {
+particles[i].weight /= W;
+weights[i] = particles[i].weight;
+
+  }
 }
 
 void ParticleFilter::resample() {
