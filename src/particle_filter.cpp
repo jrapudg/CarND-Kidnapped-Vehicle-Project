@@ -105,6 +105,33 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
    *   during the updateWeights phase.
    */
 
+   unsigned int n_obvs = observations.size();
+   unsigned int n_pred = predicted.size();
+   //double sensor_range = 50;
+
+   for (unsigned int i = 0; i < n_obvs; i++) { // For each observation
+
+         // Maximum distance is square root of 2 times the range of sensor
+         double min_distance = std::numeric_limits<double>::max();
+         //Not possible to access id
+         int nearest_landmark_Id = -1;
+
+         for (unsigned j = 0; j < n_pred; j++ ) { // For each predition.
+
+                 double delta_x = observations[i].x - predicted[j].x;
+                 double delta_y = observations[i].y - predicted[j].y;
+
+                 double distance = sqrt(delta_x * delta_x + delta_y * delta_y);
+
+                 // If the "distance" is less than min, stored the id and update min.
+                 if (distance < min_distance) {
+                   min_distance = distance;
+                   nearest_landmark_Id = predicted[j].id;
+               }
+             }
+             // Update the observation identifier.
+             observations[i].id = nearest_landmark_Id;
+  }
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
